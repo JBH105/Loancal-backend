@@ -427,9 +427,19 @@ async def tdy_owed(date):
 
 @app.post("/api/filter-data")
 async def filter_data(params: FilterParams):
+    if params.Years == []:
+        year_conditions = "1=1"
+    else:
+        year_conditions = "YEAR(p.PaymentDueDate) IN (" + ", ".join(str(year) for year in params.Years) + ")"
+
+    if params.Months == []:
+        month_conditions = "1=1"
+    else:
+        month_conditions = "MONTH(p.PaymentDueDate) IN (" + ", ".join(str(month) for month in params.Months) + ")"
+
     if params.TdyToggle:
         result = await tdy_owed(params.TdyDate)
-        return {"results":result}
+        return {"results": result}
 
     if params.ActiveStatus == "both":
         active_status = [True, False]
@@ -440,19 +450,17 @@ async def filter_data(params: FilterParams):
     else:
         active_status = ["none"]
 
-
-    month_conditions = ", ".join(str(month) for month in params.Months)
-    year_conditions = ", ".join(str(year) for year in params.Years)
     if params.ClientId == "*":
         query = f"""
-                    SELECT p.*, l.*, c.ClientName
-                    FROM {PAYMENT_TABLE_NAME} AS p
-                    JOIN {CLIENT_RECORDS_TABLE_NAME} AS l ON p.LoanId = l.LoanId
-                    JOIN {CLIENT_TABLE_NAME} AS c ON l.ClientId = c.ClientId
-                    WHERE MONTH(p.PaymentDueDate) IN ({month_conditions})
-                    AND YEAR(p.PaymentDueDate) IN ({year_conditions})
-                    AND p.PaidStatus IN :active_status
-                    """
+                SELECT p.*, l.*, c.ClientName
+                FROM {PAYMENT_TABLE_NAME} AS p
+                JOIN {CLIENT_RECORDS_TABLE_NAME} AS l ON p.LoanId = l.LoanId
+                JOIN {CLIENT_TABLE_NAME} AS c ON l.ClientId = c.ClientId
+                WHERE {month_conditions}
+                AND {year_conditions}
+                AND p.PaidStatus IN :active_status
+                ORDER BY p.PaymentDueDate DESC
+            """
 
         # Execute query
         result = await database.fetch_all(query=query, values={
@@ -460,23 +468,22 @@ async def filter_data(params: FilterParams):
         })
     else:
         query = f"""
-                    SELECT p.*, l.*, c.ClientName
-                    FROM {PAYMENT_TABLE_NAME} AS p
-                    JOIN {CLIENT_RECORDS_TABLE_NAME} AS l ON p.LoanId = l.LoanId
-                    JOIN {CLIENT_TABLE_NAME} AS c ON l.ClientId = c.ClientId
-                    WHERE MONTH(p.PaymentDueDate) IN ({month_conditions})
-                    AND YEAR(p.PaymentDueDate) IN ({year_conditions})
-                    AND (p.PaidStatus IN :active_status)
-                    AND (l.ClientId) = :client_id
-                    """
+            SELECT p.*, l.*, c.ClientName
+            FROM {PAYMENT_TABLE_NAME} AS p
+            JOIN {CLIENT_RECORDS_TABLE_NAME} AS l ON p.LoanId = l.LoanId
+            JOIN {CLIENT_TABLE_NAME} AS c ON l.ClientId = c.ClientId
+            WHERE {month_conditions}
+            AND {year_conditions}
+            AND (p.PaidStatus IN :active_status)
+            AND (l.ClientId) = :client_id
+            ORDER BY p.PaymentDueDate DESC
+        """
 
-            # Execute query
+        # Execute query
         result = await database.fetch_all(query=query, values={
-                    "active_status": active_status,
-                    "client_id": params.ClientId
-                })
-
-    # Return result
+            "active_status": active_status,
+            "client_id": params.ClientId
+        })
     return {"results":result}
 
 async def create_tables():
