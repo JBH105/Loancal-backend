@@ -19,7 +19,7 @@ DATABASE_NAME = "TestDB"
 CLIENT_TABLE_NAME = "Client"
 CLIENT_RECORDS_TABLE_NAME = "LoanRecord"
 PAYMENT_TABLE_NAME = "PaymentRecord"
-DATABASE_URL = "mysql://admin:admin1234@testdb.c7jfeg3symat.us-east-2.rds.amazonaws.com:3306/" + DATABASE_NAME
+DATABASE_URL = "mysql://doadmin:AVNS_tJTPu3HebMJc0uJB9Qp@db-mysql-nyc3-93466-do-user-16039706-0.c.db.ondigitalocean.com:25060/defaultdb"
 database = Database(DATABASE_URL)
 
 app = FastAPI()
