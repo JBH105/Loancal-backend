@@ -337,6 +337,8 @@ async def update_payment(record: Payment):
     paid_status = record.PaidStatus
     payment_id = record.PaymentId
     if record.PrincipalRemaining:
+        if record.PrinciplePaymentReceived is None:
+            record.PrinciplePaymentReceived = 0
         principal_remaining = record.PrincipalRemaining - record.PrinciplePaymentReceived
     else:
         principal_remaining = None
@@ -427,12 +429,16 @@ async def tdy_owed(date):
 
 @app.post("/api/filter-data")
 async def filter_data(params: FilterParams):
-    if params.Years == []:
+    # if params.Years == []:
+    #     year_conditions = "1=1"
+    # else:
+    #     year_conditions = "YEAR(p.PaymentDueDate) IN (" + ", ".join(str(year) for year in params.Years) + ")"
+    if params.Years[0] == 0:
         year_conditions = "1=1"
     else:
         year_conditions = "YEAR(p.PaymentDueDate) IN (" + ", ".join(str(year) for year in params.Years) + ")"
-
-    if params.Months == []:
+    
+    if params.Months[0] == 0:
         month_conditions = "1=1"
     else:
         month_conditions = "MONTH(p.PaymentDueDate) IN (" + ", ".join(str(month) for month in params.Months) + ")"
