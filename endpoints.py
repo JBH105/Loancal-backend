@@ -2,17 +2,15 @@ import decimal
 import json
 from datetime import datetime, timedelta, date
 from typing import List
-
+import time
 from dateutil.relativedelta import relativedelta
 import random
 import uuid
 from decimal import Decimal
-
 from databases import Database
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-
 from models import NewLoan, NewPayment, Client, Loan, Payment, UpdateLoan, FilterParams, NewClient, DeletePayment
 
 DATABASE_NAME = "TestDB"
@@ -137,7 +135,6 @@ async def create_new_payment(payment: NewPayment):
         "notes": None,
         "principal_remaining": payment.PrincipalRemaining
     }
-    print("====>>>>",values)
     await database.execute(query, values)
     return {"message": "New payment created successfully", "PaymentId": payment_id}
 
@@ -285,7 +282,7 @@ async def update_payment_status(payment_id: str = Query(...), paid_status: bool 
         }
     result = await database.fetch_all(query, values=values)
     total_payment = len(result)
-    if total_payment < loan["LoanLength"]:
+    if (principal_remaining is not None) and (principal_remaining>0):
         if loan["PaymentFrequency"] == "Weekly":
             new_due_date = record["PaymentDueDate"] + timedelta(days=7)
         elif loan["PaymentFrequency"] == "Monthly":
@@ -331,14 +328,53 @@ async def update_principal_remaining(loanid):
 
 
 
+# @app.put("/api/update-payment")
+# async def update_payment(record: Payment):
+#     print(record.PaymentRecDate)
+#     paid_status = record.PaidStatus
+#     payment_id = record.PaymentId
+#     if record.PrincipalRemaining:
+#         if record.PrinciplePaymentReceived is None:
+#             record.PrinciplePaymentReceived = 0
+#         principal_remaining = record.PrincipalRemaining - record.PrinciplePaymentReceived
+#     else:
+#         principal_remaining = None
+#     print(record.PrincipalRemaining)
+#     print(record.PrinciplePaymentReceived)
+#     print(principal_remaining)
+#     print(record.NewExpectedPayment)
+#     test = await update_payment_status(payment_id, paid_status, principal_remaining, record.NewExpectedPayment)
+#     query = f"""
+#                     UPDATE {PAYMENT_TABLE_NAME}
+#                     SET PaymentRecDate = :PaymentRecDate,
+#                         PaymentRecAmount = :PaymentRecAmount,
+#                         PrincipalPaymentRec = :principal_rec,
+#                         Notes = :notes
+#                     WHERE PaymentId = :payment_id
+#                     """
+
+#     values = {
+#             "PaymentRecDate": record.PaymentRecDate,
+#             "PaymentRecAmount": record.PaymentRecAmount,
+#             "payment_id": payment_id,
+#             "principal_rec": record.PrinciplePaymentReceived,
+#             "notes": record.Notes
+
+#         }
+
+#     await database.execute(query, values)
+#     return JSONResponse(content={"message": "Record updated successfully"}, status_code=200)
+
+
+
+
 @app.put("/api/update-payment")
 async def update_payment(record: Payment):
+    unix_timestamp = int(time.time())
     print(record.PaymentRecDate)
     paid_status = record.PaidStatus
     payment_id = record.PaymentId
     if record.PrincipalRemaining:
-        if record.PrinciplePaymentReceived is None:
-            record.PrinciplePaymentReceived = 0
         principal_remaining = record.PrincipalRemaining - record.PrinciplePaymentReceived
     else:
         principal_remaining = None
@@ -350,6 +386,7 @@ async def update_payment(record: Payment):
     query = f"""
                     UPDATE {PAYMENT_TABLE_NAME}
                     SET PaymentRecDate = :PaymentRecDate,
+                        UpdateTime = :unix_timestamp,
                         PaymentRecAmount = :PaymentRecAmount,
                         PrincipalPaymentRec = :principal_rec,
                         Notes = :notes
@@ -358,6 +395,7 @@ async def update_payment(record: Payment):
 
     values = {
             "PaymentRecDate": record.PaymentRecDate,
+            "unix_timestamp": unix_timestamp,
             "PaymentRecAmount": record.PaymentRecAmount,
             "payment_id": payment_id,
             "principal_rec": record.PrinciplePaymentReceived,
@@ -370,21 +408,64 @@ async def update_payment(record: Payment):
 
 
 
+
+# @app.get("/api/user-info")
+# async def user_info(client_id: str):
+#     query = f"""
+#             SELECT
+#                 c.ClientName,
+#                 cr.LoanId,
+#                 cr.LoanAmount,
+#                 cr.ActiveStatus,
+#                 cr.LoanLength,
+#                 cr.PaymentFrequency,
+#                 cr.InterestAmount,
+#                 p.PaymentDueAmount,
+#                 p.PaymentRecAmount,
+#                 p.PaidStatus,
+#                 p.PrincipalPaymentRec
+#             FROM
+#                 {CLIENT_TABLE_NAME} AS c
+#             JOIN
+#                 {CLIENT_RECORDS_TABLE_NAME} AS cr ON c.ClientId = cr.ClientId
+#             JOIN
+#                 {PAYMENT_TABLE_NAME} AS p ON cr.LoanId = p.LoanId
+#             WHERE
+#                 c.ClientId = :client_id;
+#             """
+#     values = {"client_id": client_id}
+#     rows = await database.fetch_all(query, values)  # Using fetch_all to get all matching records
+
+#         # Convert row objects to a list of dictionaries
+#     results = [dict(row) for row in rows]
+#     if not results:
+#         raise HTTPException(status_code=404, detail="User not found")
+#     return {"data": results}
+
+# @app.delete("/api/delete-payment")
+# async def delete_payment(record: DeletePayment):
+#     query = f"""
+#                         DELETE FROM {PAYMENT_TABLE_NAME}
+#                         WHERE LoanId = :loan_id AND PaymentId = :payment_id
+#                         """
+#     values = {
+#         "loan_id": record.LoanId,
+#         "payment_id": record.PaymentId
+#     }
+#     await database.execute(query, values)
+#     return JSONResponse(content={"message": "Record deleted successfully"}, status_code=200)
+
+
+
 @app.get("/api/user-info")
 async def user_info(client_id: str):
     query = f"""
             SELECT
-                c.ClientName,
-                cr.LoanId,
-                cr.LoanAmount,
-                cr.ActiveStatus,
-                cr.LoanLength,
-                cr.PaymentFrequency,
-                cr.InterestAmount,
-                p.PaymentDueAmount,
-                p.PaymentRecAmount,
-                p.PaidStatus,
-                p.PrincipalPaymentRec
+                c.ClientName AS Name,
+                SUM(p.PaymentRecAmount) AS TotalInterestPaid,
+                SUM(p.PrincipalPaymentRec) AS TotalPrincipalPaid,
+                SUM(p.PrincipalRemaining) AS TotalPrincipalDue,
+                GROUP_CONCAT(DISTINCT cr.LoanId) AS AllLoanID
             FROM
                 {CLIENT_TABLE_NAME} AS c
             JOIN
@@ -392,29 +473,52 @@ async def user_info(client_id: str):
             JOIN
                 {PAYMENT_TABLE_NAME} AS p ON cr.LoanId = p.LoanId
             WHERE
-                c.ClientId = :client_id;
+                c.ClientId = :client_id
+            GROUP BY
+                c.ClientName;
             """
     values = {"client_id": client_id}
-    rows = await database.fetch_all(query, values)  # Using fetch_all to get all matching records
+    rows = await database.fetch_all(query, values)
 
-        # Convert row objects to a list of dictionaries
-    results = [dict(row) for row in rows]
-    if not results:
+    if not rows:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"data": results}
+
+    # Since we're grouping by ClientName, we expect at most one row per client.
+    # Adjust the row to split the AllLoanID string into an array if needed.
+    result = dict(rows[0]) if rows else {}
+    if result:
+        # Split the AllLoanID string into an array, assuming comma as the separator.
+        result['AllLoanID'] = result['AllLoanID'].split(',') if result.get('AllLoanID') else []
+
+    return {"data": result}
 
 @app.delete("/api/delete-payment")
 async def delete_payment(record: DeletePayment):
-    query = f"""
-                        DELETE FROM {PAYMENT_TABLE_NAME}
-                        WHERE LoanId = :loan_id AND PaymentId = :payment_id
-                        """
-    values = {
+    # First, check how many payments exist for the given LoanId
+    count_query = f"""
+        SELECT COUNT(*) FROM {PAYMENT_TABLE_NAME}
+        WHERE LoanId = :loan_id
+    """
+    count_values = {"loan_id": record.LoanId}
+    count_result = await database.fetch_one(count_query, count_values)
+
+    # If there's only one payment, return without deleting
+    if count_result and count_result[0] == 1:
+        return JSONResponse(content={"message": "Cannot delete the only payment for this loan"}, status_code=200)
+
+    # If there are more, proceed with deletion
+    delete_query = f"""
+        DELETE FROM {PAYMENT_TABLE_NAME}
+        WHERE LoanId = :loan_id AND PaymentId = :payment_id
+    """
+    delete_values = {
         "loan_id": record.LoanId,
         "payment_id": record.PaymentId
     }
-    await database.execute(query, values)
+    await database.execute(delete_query, delete_values)
     return JSONResponse(content={"message": "Record deleted successfully"}, status_code=200)
+
+
 async def tdy_owed(date):
     query = f"""
                     SELECT p.*, l.*, c.ClientName
